@@ -1,0 +1,8 @@
+.kaggle-cli/*
+*.csv
+*.zip
+*.jpg
+*.png
+*.pickle
+*.dump
+*.pth
