@@ -6,3 +6,4 @@
 *.pickle
 *.dump
 *.pth
+*.npy
