@@ -28,7 +28,7 @@ class Network(nn.Module):
         
         elif arch == 'resnet101':
             self.model = models.resnet101(pretrained=pretrained)
-            
+        
         elif arch == 'resnet152':
             self.model = models.resnet152(pretrained=pretrained)
             

@@ -182,7 +182,7 @@ class DataSet():
                  anchors=[[1.0, 1.0]],
                  mask_size=[9, 9],
                  size=[128, 128],
-                 scale=[0.0, 0.5],
+                 scale=[-0.5, 0.5],
                  pads=[0.1, 0.1],
                  flip_x=True,
                  flip_y=True,
@@ -229,12 +229,6 @@ class DataSet():
         
         img_path = os.path.join(self.data_path, 'train', key, 'images', key + '.png')
         img = skimage.io.imread(img_path)
-        img = skimage.color.rgb2grey(img)
-        
-        if img.mean() > 0.5:
-            img = 1.0 - img
-    
-        img = skimage.color.grey2rgb(img)
         
         img_shape = img.shape[:2]
         

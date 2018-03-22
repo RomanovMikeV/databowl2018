@@ -33,7 +33,7 @@ class Trainer():
         self.epoch = 0
         self.optimizer = optimizer
         self.verbose = verbose
-    
+        
     def train(self, 
               train_loader,
               output=10):
@@ -56,7 +56,7 @@ class Trainer():
                 
             for index in range(len(target)):
                 target[index] = torch.autograd.Variable(target[index].cuda())
-                
+            
             output = self.socket.model.forward(input)
             loss = self.socket.criterion(output, target)
             
@@ -64,7 +64,7 @@ class Trainer():
             loss.backward()
             self.optimizer.step()
             
-            losses.update(loss.data[0])
+            losses.update(loss.data.item())
             
             batch_time.update(time.time() - end)
             end = time.time()

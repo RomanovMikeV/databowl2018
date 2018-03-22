@@ -7,3 +7,9 @@
 *.dump
 *.pth
 *.npy
+*.ipynb_checkpoints*
+*ipython/*
+*.json
+*__pycache__*
+*.pth.tar
+
