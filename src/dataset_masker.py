@@ -176,6 +176,47 @@ def masks_to_targets(masks,
         
     return targets, targets_masks
 
+def cutout(array, x_cut, y_cut):
+    x_start = x_cut[0]
+    x_end   = x_cut[1]
+    
+    y_start = y_cut[0]
+    y_end   = y_cut[1]
+    
+    pad_left   = 0
+    pad_right  = 0
+    pad_top    = 0
+    pad_bottom = 0
+    
+    if x_start < 0:
+        pad_left = -x_start
+        x_start = 0
+        
+    if y_start < 0:
+        pad_top = -y_start
+        y_start = 0
+        
+    if x_end > array.shape[0]:
+        pad_right = x_end - array.shape[0]
+        x_end = array.shape[0]
+        
+    if y_end > array.shape[1]:
+        pad_bottom = y_end - array.shape[1]
+        y_end = array.shape[1]
+        
+    res = array[x_start:x_end, y_start:y_end, :3]
+    
+    #print([x_start, x_end], [y_start, y_end])
+    #print(res.shape)
+    #print([pad_left, pad_right], [pad_top, pad_bottom])
+    
+    res = numpy.pad(res, [[pad_left, pad_right], 
+                          [pad_top, pad_bottom],
+                          [0, 0]], 
+                         mode='constant', constant_values=0)
+    
+    return res
+
 class DataSet():
     def __init__(self, data_path, 
                  mode='train', valid_split=0.1,
@@ -183,7 +224,9 @@ class DataSet():
                  mask_size=[9, 9],
                  size=[128, 128],
                  scale=[-0.5, 0.5],
-                 pads=[0.1, 0.1],
+                 min_pads=[0.1, 0.1],
+                 max_pads=[0.3, 0.3],
+                 surrounding=3.0,
                  flip_x=True,
                  flip_y=True,
                  swap_xy=True):
@@ -191,13 +234,15 @@ class DataSet():
         self.valid_split = valid_split
         self.data_path = data_path
         self.scale = scale
-        self.pads = pads
+        self.min_pads = min_pads
+        self.max_pads = max_pads
         self.flip_x = flip_x
         self.flip_y = flip_y
         self.swap_xy = swap_xy
         self.size = size
         self.anchors = anchors
         self.mask_size=mask_size
+        self.surrounding = surrounding
         
         dataset_file = os.path.join(data_path, 'train_dataset.json')
         
@@ -229,15 +274,110 @@ class DataSet():
         
         img_path = os.path.join(self.data_path, 'train', key, 'images', key + '.png')
         img = skimage.io.imread(img_path)
+        img = skimage.color.rgb2grey(img)
+        
+        if img.mean() > 0.5:
+            img = 1.0 - img
+    
+        img = skimage.color.grey2rgb(img)
         
         img_shape = img.shape[:2]
         
         masks = deepcopy(self.dataset[key])
         
-        for mask in masks:
-            mask_tensor = self.rle.decode(mask[1])
-            mask[1] = mask_tensor
+        # Here I select a random mask
         
+        mask = masks[random.randrange(len(masks))]
+        
+        mask_tensor = self.rle.decode(mask[1])
+        mask[1] = mask_tensor
+        #print(mask[1])
+        
+        #print(mask[0], mask[1].shape)
+        bbox = mask[0]
+        
+        left = round(bbox[0] * (img.shape[0]))
+        top = round(bbox[1] * (img.shape[1]))
+        right = round(bbox[2] * (img.shape[0]))
+        bottom = round(bbox[3] * (img.shape[1]))
+        
+        width = right - left
+        height = bottom - top
+        
+        pad_left   = int(width * random.uniform(self.min_pads[0], self.max_pads[0]))
+        pad_right  = int(width * random.uniform(self.min_pads[0], self.max_pads[0]))
+        
+        pad_top    = int(height * random.uniform(self.min_pads[1], self.max_pads[1]))
+        pad_bottom = int(height * random.uniform(self.min_pads[1], self.max_pads[1]))
+        
+        pad_left, pad_top, pad_right, pad_bottom = 0, 0, 0, 0
+        
+        new_left = left - pad_left
+        new_right = right + pad_right
+        new_top = top - pad_top
+        new_bottom = bottom + pad_bottom
+        
+        center_x = (new_left + new_right) / 2.0
+        center_y = (new_top + new_bottom) / 2.0
+        
+        new_width = (new_right - new_left) / 2.0 * self.surrounding
+        new_height = (new_bottom - new_top) / 2.0 * self.surrounding
+        
+        new_left = int(center_x - new_width)
+        new_right = int(center_x + new_width) + 1
+        
+        new_top = int(center_y - new_height)
+        new_bottom = int(center_y + new_height) + 1
+        
+        #print([new_left, new_right], [new_top, new_bottom])
+        
+        img = cutout(img, [new_left, new_right], [new_top, new_bottom])
+        
+        mask = mask[1]
+        
+        #print([pad_left, pad_right], [pad_top, pad_bottom])
+        mask = numpy.pad(mask, 
+                         ((pad_right, pad_left), 
+                          (pad_bottom, pad_top)), 
+                         mode='constant', constant_values=0)
+        
+        img_size = []
+        for size in self.size:
+            img_size.append(size * self.surrounding)
+        
+        img = skimage.transform.resize(img, img_size, mode='constant', order=3, cval=0)
+        mask = skimage.transform.resize(mask, self.size, mode='constant', order=3, cval=0)
+        
+        # FLIPPING THE IMAGE
+        
+        flip_x_flag = False
+        flip_y_flag = False
+        swap_xy_flag = False
+        
+        if self.flip_x:
+            flip_x_flag = (random.random() > 0.5)
+        if self.flip_y:
+            flip_y_flag = (random.random() > 0.5)
+        if self.swap_xy:
+            swap_xy_flag = (random.random() > 0.5)
+            
+        if flip_x_flag:
+            img = numpy.flip(img, axis=0)
+            mask = numpy.flip(mask, axis=0)
+                
+        if flip_y_flag:
+            img = numpy.flip(img, axis=1)
+            mask = numpy.flip(mask, axis=1)
+                
+        if swap_xy_flag:
+            img = img.swapaxes(0, 1)
+            mask = mask.swapaxes(0, 1)
+        
+        img = torch.Tensor(img.copy()).transpose(0, 2)
+        mask = torch.Tensor(mask.copy()).unsqueeze(-1).transpose(0, 2)
+        return [img], [mask]
+        
+        '''
         # JITTERING THE IMAGE
         
         top_pad = random.random() * self.pads[1]
@@ -326,3 +466,4 @@ class DataSet():
         targets_masks = torch.from_numpy(targets_masks).transpose(0, 2).float()
         
         return [img[:3, :, :]], [targets_bboxes, targets_masks]
+        '''
