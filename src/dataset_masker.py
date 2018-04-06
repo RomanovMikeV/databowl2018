@@ -265,6 +265,9 @@ class DataSet():
             return len(self.train_keys)
 
     def __getitem__(self, index):
+        
+        random_flag = (random.random() > 0.5)
+        
         keys = self.train_keys
         
         if self.mode == 'valid':
@@ -319,6 +322,10 @@ class DataSet():
         
         center_x = (new_left + new_right) / 2.0
         center_y = (new_top + new_bottom) / 2.0
+        
+        if random_flag:
+            center_x = int(random.uniform(0, img.shape[0]))
+            center_y = int(random.uniform(0, img.shape[1]))
         
         new_width = (new_right - new_left) / 2.0 * self.surrounding
         new_height = (new_bottom - new_top) / 2.0 * self.surrounding
@@ -375,7 +382,13 @@ class DataSet():
         
         img = torch.Tensor(img.copy()).transpose(0, 2)
         mask = torch.Tensor(mask.copy()).unsqueeze(-1).transpose(0, 2)
-        return [img], [mask]
+        
+        if random_flag:
+            mask[:, :, :] = 0
+            
+        indicator = torch.FloatTensor([1.0 - random_flag])
+            
+        return [img], [mask, indicator]
         
         '''
         # JITTERING THE IMAGE

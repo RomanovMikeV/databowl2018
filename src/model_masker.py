@@ -45,6 +45,7 @@ class Network(nn.Module):
         self.up_bn4 = torch.nn.BatchNorm2d(512)
         self.up5 = torch.nn.Conv2d(128, 256, (3, 3), padding=(1, 1))
         self.up_bn5 = torch.nn.BatchNorm2d(256)
+        self.decider = torch.nn.Linear(64, 1)
         
         self.mask_size = mask_size
         
@@ -71,6 +72,10 @@ class Network(nn.Module):
         layer_2_out = self.model.layer2(layer_1_out)
         layer_3_out = self.model.layer3(layer_2_out)
         layer_4_out = self.model.layer4(layer_3_out)
+        
+        #print(layer_4_out.size())
+        
+        #indicator = torch.sigmoid(self.decider(layer_4_out[:, :, 32:64, 32:64].mean(dim=3).mean(dim=2)))
         
         # Scaling up
         layer_4_up = self.elu(self.ps(self.up_bn1(self.up1(layer_4_out))))
@@ -100,6 +105,7 @@ class Network(nn.Module):
         
         #print(layer_0_up.size(), '<- layer 0 up size')
         
+        indicator = torch.sigmoid(self.decider(layer_0_up[:, :, 32:64, 32:64].mean(dim=3).mean(dim=2)))
         result = torch.sigmoid(self.masker(torch.cat([layer_0_up, layer_input], dim=1)))
         
         #print(result.size(), '<- result size')
@@ -111,7 +117,7 @@ class Network(nn.Module):
         
         #masks = torch.sigmoid(self.masker(layer_1_out + layer_2_up))
 
-        return [result]
+        return [result, indicator]
 
 
 class Socket():
@@ -122,11 +128,13 @@ class Socket():
     @staticmethod
     def binary_ce(outputs, targets):
         return - (targets * torch.log(outputs + 1.0e-8) + 
-                  (1.0 - targets) * torch.log(1.0 - outputs + 1.0e-8)).mean()
+                  (1.0 - targets) * torch.log(1.0 - outputs + 1.0e-8))
     
     
     def criterion(self, output, target):
-        return self.binary_ce(output[0][:, :, 32:64, 32:64], target[0])
+        mask_loss = (target[1] * self.binary_ce(output[0][:, :, 32:64, 32:64], target[0]).mean(dim=3).mean(dim=2).mean(dim=1)).mean()
+        indicator_loss = self.binary_ce(output[1], target[1]).mean()
+        return mask_loss + indicator_loss
 
     
     @staticmethod
@@ -137,13 +145,21 @@ class Socket():
         intersections = (predicted * target).sum(dim=3).sum(dim=2).sum(dim=1)
         unions = predicted.sum(dim=3).sum(dim=2).sum(dim=1) + target.sum(dim=3).sum(dim=2).sum(dim=1) - intersections
         
-        return (intersections / (unions + 1.0e-8)).sum() / target.size(0)
+        return (intersections / (unions + 1.0e-8)).sum()
+    
+    @staticmethod
+    def indicator_roc_auc(predicted, target):
+        return sklearn.metrics.roc_auc_score(target, predicted)
+        
     
     
     def metrics(self, outputs, targets):
         results = []
         
-        masks_iou = self.mask_iou((outputs[0] > 0.5).float(), targets[0]).item()
+        masks_iou = (self.mask_iou((outputs[0] > 0.5).float(), targets[0]).item() / targets[1].sum()).item()
+        roc_auc = self.indicator_roc_auc(outputs[1], targets[1])
             
         results.append(masks_iou)
+        results.append(roc_auc)
+        
         return results

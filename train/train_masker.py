@@ -66,7 +66,8 @@ pretrain_modules = torch.nn.ModuleList([socket.model.up_bn1,
                                         socket.model.up3,
                                         socket.model.up4,
                                         socket.model.up5,
-                                        socket.model.masker]).parameters()
+                                        socket.model.masker,
+                                        socket.model.decider]).parameters()
 # train_moduels = net.parameters()
 
 pretrain_optimizer = torch.optim.Adam(pretrain_modules, lr=3.0e-5)
