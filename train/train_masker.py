@@ -70,6 +70,7 @@ pretrain_modules = torch.nn.ModuleList([socket.model.up_bn1,
                                         socket.model.decider]).parameters()
 # train_moduels = net.parameters()
 
+'''
 pretrain_optimizer = torch.optim.Adam(pretrain_modules, lr=3.0e-5)
 my_pretrainer = trainer.Trainer(socket, pretrain_optimizer)
 
@@ -104,6 +105,7 @@ for epoch in range(1000):
         my_pretrainer.make_checkpoint(prefix='masker_pretraining_')
 
 train_modules = socket.model.parameters()
+'''
 
 train_optimizer = torch.optim.Adam(train_modules, lr=3.0e-5)
 my_trainer = trainer.Trainer(socket, train_optimizer)

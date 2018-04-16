@@ -81,6 +81,11 @@ class Network(nn.Module):
         return [result, masks]
 
 
+def huber(x, delta=0.5):
+    res = torch.abs(x)
+    res = (res - 0.5) * (res >= 0.5).float() + (res < 0.5).float() * (res) ** 2
+    return res
+    
 class Socket():
     def __init__(self, model, anchors,
                  penalize_bbox=True,
@@ -120,13 +125,13 @@ class Socket():
         
             bbox_loss = bbox_loss + (
                 target[0][:, anchor_index * anchor_size + 0, :, :] * (
-                torch.abs(output[0][:, anchor_index * anchor_size + 1, :, :] - 
+                huber(output[0][:, anchor_index * anchor_size + 1, :, :] - 
                           target[0][:, anchor_index * anchor_size + 1, :, :]) +
-                torch.abs(output[0][:, anchor_index * anchor_size + 2, :, :] - 
+                huber(output[0][:, anchor_index * anchor_size + 2, :, :] - 
                           target[0][:, anchor_index * anchor_size + 2, :, :]) +
-                torch.abs(output[0][:, anchor_index * anchor_size + 3, :, :] - 
+                huber(output[0][:, anchor_index * anchor_size + 3, :, :] - 
                           target[0][:, anchor_index * anchor_size + 3, :, :]) + 
-                torch.abs(output[0][:, anchor_index * anchor_size + 4, :, :] - 
+                huber(output[0][:, anchor_index * anchor_size + 4, :, :] - 
                           target[0][:, anchor_index * anchor_size + 4, :, :])
                 )).sum()
             
